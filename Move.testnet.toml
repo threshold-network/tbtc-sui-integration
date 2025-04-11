@@ -1,0 +1,19 @@
+[package]
+name = "l2_tBTC"
+edition = "2024.beta"  # Use 'legacy' if '2024.beta' causes issues
+license = "GPL-3.0-only"
+authors = ["The tBTC team"]
+version = "0.1.0"
+published-at ="0x06fb016afe31ddafcd4d3c43654c478179200d335eae1da5f4d2cebab35a630e"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "041c5f2bae2fe52079e44b70514333532d69f4e6" }
+Wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "main" }
+TokenBridge = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/token_bridge", rev = "main" }
+
+[addresses]
+token_bridge = "0x562760fc51d90d4ae1835bac3e91e0e6987d3497b06f066941d3e51f6e8d76d0"
+l2_tbtc = "0x0"    # Replace with the actual address where l2_tbtc is deployed
+ wormhole = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94"
+
+
