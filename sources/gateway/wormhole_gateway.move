@@ -27,6 +27,8 @@ module l2_tbtc::Gateway {
     const E_ALREADY_INITIALIZED: u64 = 6;
     const E_NOT_INITIALIZED: u64 = 7;
     const E_PAUSED: u64 = 8;
+    const E_NOT_PAUSED: u64 = 9;
+    const E_WRONG_NONCE: u64 = 10;
 
     // === Events ===
 
@@ -77,6 +79,8 @@ module l2_tbtc::Gateway {
         is_initialized: bool,
         // Paused state
         paused: bool,
+        // Nonce
+        nonce: u32,
     }
 
     /// Separate object to store capabilities
@@ -126,6 +130,7 @@ module l2_tbtc::Gateway {
             minted_amount: 0,
             is_initialized: false,
             paused: false,
+            nonce: 0,
         };
 
         // Create and share the admin capability
@@ -286,6 +291,7 @@ module l2_tbtc::Gateway {
     public entry fun pause(_: &AdminCap, state: &mut GatewayState, _ctx: &mut TxContext) {
         // Verify the gateway is initialized
         assert!(state.is_initialized, E_NOT_INITIALIZED);
+        assert!(!state.paused, E_PAUSED);
 
         state.paused = true;
         event::emit(Paused {});
@@ -299,6 +305,7 @@ module l2_tbtc::Gateway {
     public entry fun unpause(_: &AdminCap, state: &mut GatewayState, _ctx: &mut TxContext) {
         // Verify the gateway is initialized
         assert!(state.is_initialized, E_NOT_INITIALIZED);
+        assert!(state.paused, E_NOT_PAUSED);
 
         state.paused = false;
         event::emit(Unpaused {});
@@ -478,6 +485,9 @@ module l2_tbtc::Gateway {
         assert!(state.is_initialized, E_NOT_INITIALIZED);
         assert!(!state.paused, E_PAUSED);
 
+        // Check if the nonce is valid
+        assert!(state.nonce + 1 == nonce, E_WRONG_NONCE);
+
         // Verify recipient chain has a trusted receiver
         assert!(receiver_exists(state, recipient_chain), E_INVALID_CHAIN_ID);
 
@@ -547,6 +557,9 @@ module l2_tbtc::Gateway {
             clock,
         );
 
+        // Increment the nonce
+        increment_nonce(state);
+
         // Emit an event for the transaction
         event::emit(TokensSent {
             sequence,
@@ -584,6 +597,9 @@ module l2_tbtc::Gateway {
         // Check gateway state
         assert!(state.is_initialized, E_NOT_INITIALIZED);
         assert!(!state.paused, E_PAUSED);
+
+        // Check if the nonce is valid
+        assert!(state.nonce + 1 == nonce, E_WRONG_NONCE);
 
         // Verify recipient chain has a trusted receiver
         assert!(receiver_exists(state, recipient_chain), E_INVALID_CHAIN_ID);
@@ -631,6 +647,9 @@ module l2_tbtc::Gateway {
             clock,
         );
 
+        // Increment the nonce
+        increment_nonce(state);
+
         // Emit an event for the transaction
         event::emit(TokensSent {
             sequence,
@@ -639,6 +658,39 @@ module l2_tbtc::Gateway {
             recipient: sui::address::from_bytes(recipient_address),
             nonce,
         });
+    }
+
+    /// Helper to check the current nonce
+    public fun check_nonce(state: &GatewayState): u32 {
+        // Check gateway state
+        assert!(state.is_initialized, E_NOT_INITIALIZED);
+        assert!(!state.paused, E_PAUSED);
+        // Return the current nonce
+        state.nonce
+    }
+
+    /// Helper function to increment the nonce
+    /// state - GatewayState
+    /// It is used to increment the nonce
+    /// The nonce is used to prevent replay attacks
+    /// The nonce is incremented by 1 if the current nonce is less than the max value of u32
+    /// The nonce is reset to 0 if the current nonce is equal to the max value of u32
+    /// The function reverts if the gateway is not initialized
+    /// The function reverts if the gateway is paused
+    /// The function reverts if the nonce is not valid
+    fun increment_nonce(state: &mut GatewayState) {
+        // Check gateway state
+        assert!(state.is_initialized, E_NOT_INITIALIZED);
+        assert!(!state.paused, E_PAUSED);
+
+        // Check if nonce does not exeed the max value of u32
+        if (state.nonce == 4_294_967_293u32) {
+            // Reset the nonce to 0 
+            state.nonce = 0;
+        } else {
+            // Increment the nonce
+            state.nonce = state.nonce + 1;
+        }
     }
 
     /// Helper function to check if an emitter exists
@@ -728,6 +780,7 @@ module l2_tbtc::Gateway {
             trusted_emitters: table::new(ctx),
             trusted_receivers: table::new(ctx),
             id: object::new(ctx),
+            nonce: 0,
         };
         // Create and share the admin capability
         let admin_cap = AdminCap {
@@ -737,6 +790,12 @@ module l2_tbtc::Gateway {
         // Share state object and transfer admin capability
         transfer::transfer(admin_cap, ctx.sender());
         transfer::share_object(gateway_state);
+    }
+
+    /// Setter for nonce for testing purposes
+    #[test_only]
+    public fun set_nonce(state: &mut GatewayState, nonce: u32) {
+        state.nonce = nonce;
     }
 
     #[test_only]

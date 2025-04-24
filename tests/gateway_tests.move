@@ -1434,4 +1434,224 @@ module l2_tbtc::gateway_tests {
         test_scenario::end(scenario);
     }
 
+    #[test]
+    #[expected_failure(abort_code = Gateway::E_WRONG_NONCE)]
+    fun test_wrong_nonce() {
+       let (admin, _coin_deployer) = two_people();
+        let mut scenario = test_scenario::begin(admin);
+        let wormhole_fee = 1;
+
+        // Initialize TBTC
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            init_tbtc_for_test_scenario(&mut scenario, admin);
+        };
+
+        // Initialize Wormhole
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            let expected_source_chain = 2;
+            set_up_wormhole_and_token_bridge(&mut scenario, wormhole_fee);
+            register_dummy_emitter(&mut scenario, expected_source_chain);
+        };
+
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            Gateway::init_test(test_scenario::ctx(&mut scenario));
+        };
+
+        // Initialize Gateway
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            initialize_gateway_state(&mut scenario);
+        };
+
+        let coin_wrapped = coin_wrapped_12::init_register_and_mint(
+            &mut scenario,
+            admin,
+            1000000000000000,
+        );
+
+        // register receiver
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            let gateway_admin_cap = test_scenario::take_from_sender<Gateway::AdminCap>(&scenario);
+            let mut gateway_state = test_scenario::take_shared<Gateway::GatewayState>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+
+            Gateway::add_trusted_receiver(
+                &gateway_admin_cap,
+                &mut gateway_state,
+                2,
+                x"0000000000000000000000000000000000000000000000000000000000000001",
+                ctx,
+            );
+
+            // Return objects
+            test_scenario::return_to_sender(&scenario, gateway_admin_cap);
+            test_scenario::return_shared(gateway_state);
+        };
+
+        // Send wrapped tokens
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            let mut gateway_state = test_scenario::take_shared<Gateway::GatewayState>(&scenario);
+            let mut capabilities = test_scenario::take_shared<Gateway::GatewayCapabilities>(&scenario);
+            let mut token_bridge_state = take_token_bridge_state(&scenario);
+            let mut wormhole_state = take_wormhole_state(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+
+            let recipient_chain = 2;
+            let mut recipient_address = vector::empty<u8>();
+            vector::append(
+                &mut recipient_address,
+                x"0000000000000000000000000000000000000000000000000000000000000001",
+            );
+
+            // get sui native coins
+            let sui_coin = create_sui_coin(wormhole_fee, ctx);
+            let clock = clock::create_for_testing(ctx);
+
+            Gateway::send_wrapped_tokens<coin_wrapped_12::COIN_WRAPPED_12>(
+                &mut gateway_state,
+                &mut capabilities,
+                &mut token_bridge_state,
+                &mut wormhole_state,
+                recipient_chain,
+                recipient_address,
+                coin::from_balance(coin_wrapped, ctx),
+                2,
+                sui_coin,
+                &clock,
+                ctx,
+            );
+
+            test_scenario::return_shared(gateway_state);
+            test_scenario::return_shared(capabilities);
+            clock::destroy_for_testing(clock);
+            return_wormhole_state(wormhole_state);
+            return_token_bridge_state(token_bridge_state);
+        };
+        test_scenario::end(scenario);
+    }
+
+     #[test]
+    fun test_nonce_reset() {
+       let (admin, _coin_deployer) = two_people();
+        let mut scenario = test_scenario::begin(admin);
+        let wormhole_fee = 1;
+
+        // Initialize TBTC
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            init_tbtc_for_test_scenario(&mut scenario, admin);
+        };
+
+        // Initialize Wormhole
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            let expected_source_chain = 2;
+            set_up_wormhole_and_token_bridge(&mut scenario, wormhole_fee);
+            register_dummy_emitter(&mut scenario, expected_source_chain);
+        };
+
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            Gateway::init_test(test_scenario::ctx(&mut scenario));
+        };
+
+        // Initialize Gateway
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            initialize_gateway_state(&mut scenario);
+        };
+
+        let coin_wrapped = coin_wrapped_12::init_register_and_mint(
+            &mut scenario,
+            admin,
+            1000000000000000,
+        );
+
+        // register receiver
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            let gateway_admin_cap = test_scenario::take_from_sender<Gateway::AdminCap>(&scenario);
+            let mut gateway_state = test_scenario::take_shared<Gateway::GatewayState>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+
+            Gateway::add_trusted_receiver(
+                &gateway_admin_cap,
+                &mut gateway_state,
+                2,
+                x"0000000000000000000000000000000000000000000000000000000000000001",
+                ctx,
+            );
+
+            // Return objects
+            test_scenario::return_to_sender(&scenario, gateway_admin_cap);
+            test_scenario::return_shared(gateway_state);
+        };
+
+        // Set nonce to max
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            let mut gateway_state = test_scenario::take_shared<Gateway::GatewayState>(&scenario);
+
+            Gateway::set_nonce(&mut gateway_state, 4_294_967_293u32);
+
+            test_scenario::return_shared(gateway_state);
+        };
+
+        // Send wrapped tokens
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            let mut gateway_state = test_scenario::take_shared<Gateway::GatewayState>(&scenario);
+            let mut capabilities = test_scenario::take_shared<Gateway::GatewayCapabilities>(&scenario);
+            let mut token_bridge_state = take_token_bridge_state(&scenario);
+            let mut wormhole_state = take_wormhole_state(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+
+            let recipient_chain = 2;
+            let mut recipient_address = vector::empty<u8>();
+            vector::append(
+                &mut recipient_address,
+                x"0000000000000000000000000000000000000000000000000000000000000001",
+            );
+
+            // get sui native coins
+            let sui_coin = create_sui_coin(wormhole_fee, ctx);
+            let clock = clock::create_for_testing(ctx);
+
+            Gateway::send_wrapped_tokens<coin_wrapped_12::COIN_WRAPPED_12>(
+                &mut gateway_state,
+                &mut capabilities,
+                &mut token_bridge_state,
+                &mut wormhole_state,
+                recipient_chain,
+                recipient_address,
+                coin::from_balance(coin_wrapped, ctx),
+                4_294_967_294u32,
+                sui_coin,
+                &clock,
+                ctx,
+            );
+
+            test_scenario::return_shared(gateway_state);
+            test_scenario::return_shared(capabilities);
+            clock::destroy_for_testing(clock);
+            return_wormhole_state(wormhole_state);
+            return_token_bridge_state(token_bridge_state);
+        };
+
+        // check if nonce is reset
+        test_scenario::next_tx(&mut scenario, admin);
+        {
+            let gateway_state = test_scenario::take_shared<Gateway::GatewayState>(&scenario);
+
+            assert!(Gateway::check_nonce(&gateway_state) == 0, 0);
+
+            test_scenario::return_shared(gateway_state);
+        };
+        test_scenario::end(scenario);
+    }
 }

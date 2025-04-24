@@ -63,7 +63,9 @@ module l2_tbtc::TBTC {
     fun init(witness: TBTC, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency(
             witness,
-            9, // Bitcoin uses 8 decimals, but many chains use 9 for tBTC
+            // Setting decimals to 8 since wormhole uses max 8 decimals for wrapped tokens, and doing it this way we are avoiding normalization 
+            // https://github.com/wormhole-foundation/wormhole/blob/4afcbdeb13ec03bdc45516c9be6da0091079f352/sui/token_bridge/sources/datatypes/normalized_amount.move#L25
+            8, 
             b"TBTC",
             b"Threshold Bitcoin",
             b"Canonical L2/sidechain token implementation for tBTC",
@@ -135,8 +137,6 @@ module l2_tbtc::TBTC {
         minter: address,
         _ctx: &mut TxContext,
     ) {
-        assert!(is_minter(state, minter), E_NOT_IN_MINTERS_LIST);
-
         let (found, index) = vector::index_of(&state.minters, &minter);
         assert!(found, E_NOT_IN_MINTERS_LIST);
 
@@ -186,8 +186,6 @@ module l2_tbtc::TBTC {
         guardian: address,
         _ctx: &mut TxContext,
     ) {
-        assert!(is_guardian(state, guardian), E_NOT_IN_GUARDIANS_LIST);
-
         let (found, index) = vector::index_of(&state.guardians, &guardian);
         assert!(found, E_NOT_IN_GUARDIANS_LIST);
 
