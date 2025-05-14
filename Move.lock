@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "11CE1BA614D73956E1B15013C628850EDCBB10E784A1FB39308099BDEE7EBF68"
+manifest_digest = "DE18F1B30A3FBA49A658926F8819F9D2C6222D0764CA558D526E9512F959CA11"
 deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -24,26 +24,23 @@ dependencies = [
 
 [[move.package]]
 id = "TokenBridge"
-source = { local = "token_bridge" }
+source = { local = "../wormhole/sui/token_bridge" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
-]
-
-dev-dependencies = [
   { id = "Wormhole", name = "Wormhole" },
 ]
 
 [[move.package]]
 id = "Wormhole"
-source = { local = "wormhole" }
+source = { local = "../wormhole/sui/wormhole" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
 [move.toolchain-version]
-compiler-version = "1.40.3"
+compiler-version = "1.48.1"
 edition = "2024.beta"
 flavor = "sui"
 
@@ -51,6 +48,6 @@ flavor = "sui"
 
 [env.testnet]
 chain-id = "4c78adac"
-original-published-id = "0x06fb016afe31ddafcd4d3c43654c478179200d335eae1da5f4d2cebab35a630e"
-latest-published-id = "0x06fb016afe31ddafcd4d3c43654c478179200d335eae1da5f4d2cebab35a630e"
+original-published-id = "0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7"
+latest-published-id = "0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7"
 published-version = "1"
