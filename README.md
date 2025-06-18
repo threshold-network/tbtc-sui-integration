@@ -14,6 +14,9 @@ For detailed documentation and usage instructions of the specific contract check
 - [Gateway Contract](/docs/gateway.md)
 - [tBTC Coin Contract](/docs/tbtc.md)
 
+### Audit
+
+Audit report is available [here](/docs/audit_report.pdf).
 
 ## Prerequisites
 
