@@ -99,32 +99,6 @@ module l2_tbtc::TBTC {
 
     // ===== Owner functions =====
 
-    /// Add a new minter address
-    /// Requires AdminCap
-    /// state - TokenState
-    /// minter - Address to add as a minter
-    /// ctx - Transaction context
-    /// Emits MinterAdded event
-    public entry fun add_minter(
-        _: &AdminCap,
-        state: &mut TokenState,
-        minter: address,
-        ctx: &mut TxContext,
-    ) {
-        assert!(!is_minter(state, minter), E_ALREADY_MINTER);
-
-        vector::push_back(&mut state.minters, minter);
-
-        // Create and transfer a minter capability to the minter
-        let minter_cap = MinterCap {
-            id: object::new(ctx),
-            minter,
-        };
-        transfer::public_transfer(minter_cap, minter);
-
-        event::emit(MinterAdded { minter });
-    }
-
     /// Add a new minter address and return the MinterCap
     /// This function fixes the MinterCap issue by returning the cap instead of transferring it
     /// Requires AdminCap
@@ -176,42 +150,6 @@ module l2_tbtc::TBTC {
         // but it will no longer be valid as we've removed the minter from the state
 
         event::emit(MinterRemoved { minter });
-    }
-
-    /// Add a new minter and return the MinterCap to the caller
-    /// This variant is designed for cases where the minter is a shared object
-    /// and cannot receive the MinterCap directly (e.g., Gateway)
-    /// 
-    /// Requires AdminCap
-    /// state - TokenState  
-    /// minter - Address to add as a minter
-    /// ctx - Transaction context
-    /// Returns - MinterCap that can be used by the caller
-    /// 
-    /// Note: This is a public function (not entry) to allow returning MinterCap
-    public fun add_minter_with_cap(
-        _: &AdminCap,
-        state: &mut TokenState,
-        minter: address,
-        ctx: &mut TxContext,
-    ): MinterCap {
-        // Ensure the address is not already a minter
-        assert!(!is_minter(state, minter), E_ALREADY_MINTER);
-
-        // Add the minter to the state
-        vector::push_back(&mut state.minters, minter);
-
-        // Create the MinterCap
-        let minter_cap = MinterCap {
-            id: object::new(ctx),
-            minter,
-        };
-
-        // Emit the event
-        event::emit(MinterAdded { minter });
-
-        // Return the MinterCap to the caller instead of transferring it
-        minter_cap
     }
 
     /// Add a new guardian address
