@@ -125,6 +125,36 @@ module l2_tbtc::TBTC {
         event::emit(MinterAdded { minter });
     }
 
+    /// Add a new minter address and return the MinterCap
+    /// This function fixes the MinterCap issue by returning the cap instead of transferring it
+    /// Requires AdminCap
+    /// state - TokenState
+    /// minter - Address to add as a minter
+    /// ctx - Transaction context
+    /// Returns: MinterCap for the minter
+    /// Emits MinterAdded event
+    public fun add_minter_with_cap(
+        _: &AdminCap,
+        state: &mut TokenState,
+        minter: address,
+        ctx: &mut TxContext,
+    ): MinterCap {
+        assert!(!is_minter(state, minter), E_ALREADY_MINTER);
+
+        vector::push_back(&mut state.minters, minter);
+
+        // Create and return the minter capability
+        let minter_cap = MinterCap {
+            id: object::new(ctx),
+            minter,
+        };
+
+        event::emit(MinterAdded { minter });
+        
+        // Return the MinterCap instead of transferring it
+        minter_cap
+    }
+
     /// Remove a minter address
     /// Requires AdminCap
     /// state - TokenState
