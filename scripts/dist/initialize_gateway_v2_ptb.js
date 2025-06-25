@@ -10,22 +10,22 @@ const client_1 = require("@mysten/sui.js/client");
 const ed25519_1 = require("@mysten/sui.js/keypairs/ed25519");
 const secp256k1_1 = require("@mysten/sui.js/keypairs/secp256k1");
 const utils_1 = require("@mysten/sui.js/utils");
-// V4 Testnet deployment configuration (with Sepolia chain ID support)
+// V6 Testnet deployment configuration (with standard withdrawal support)
 const CONFIG = {
     network: 'testnet',
-    packageId: '0x958ea8ea472b7c274961ed94aac36d67c2971acbf435e65a940f5ce43203d140',
+    packageId: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae',
     // Admin capabilities
     adminCaps: {
-        tbtc: '0x035f2fd95125b175afe5ed2d26b341ba7dda19ac4132e2419d0f739a5b6035cd',
-        gateway: '0x10917847b2a4474fe9f33bf10e5f3f3af3d546f4a4c60ca99ea45a3ff42dc72d',
-        treasuryCap: '0x6dde9e89509fe4d28bebdc037990e54a41d9390190a347a15e8be92c0bd92ad2',
-        bitcoinDepositor: '0x00fcb7c584d77e50e971f3d27d88d31516d62fca429ab33081d3ec6f85808131',
+        tbtc: '0xe9a63c6f92f6deb510c02277415b7d77767c51a6f7f6bd5b396f62dc636e8afb',
+        gateway: '0xe766382bb09702bbfe0bc5bcf0c2765e72033f0386da98c3eac1476277f4ef01',
+        treasuryCap: '0x1e985914c3f7436c70f466ffe4efd12aeb525864dcc3bc9454d0c0bb363eb8fd',
+        bitcoinDepositor: '0x1b66f0f520c1234445ce69b7fb9275fa5087de3ff8db1746b2f7903e29f294f3',
     },
     // Shared objects
     sharedObjects: {
-        tokenState: '0xdbfda6e3a9518847968ba66209c6eb171df9568576011f9ee63fb9672dfdecc1',
-        gatewayState: '0x5026aeca1bed969649d7ad11f66377f0b0215dfae7f64f00e4a35d02c8cc4399',
-        receiverState: '0x7e55e90a6696944a9e510704018c64249ce483947c41a8e777b5edfd6c1e4b14',
+        tokenState: '0x0d59e4970772269ee917280da592089c7de389ed67164ce4c07ed508917fdf08',
+        gatewayState: '0x19ab17536712e3e2efa9a1c01acbf5c09ae53e969cb9046dc382f5f49b603d52',
+        receiverState: '0x10f421d7960be14c07057fd821332ee8a9d717873c62e7fa370fa99913e8e924',
     },
     // Wormhole configuration
     wormhole: {
@@ -39,7 +39,7 @@ const CONFIG = {
     }
 };
 async function initializeGatewayV2() {
-    console.log('🚀 Initializing Gateway V2 with MinterCap Fix\n');
+    console.log('🚀 Initializing Gateway V6 with Standard Withdrawal Support\n');
     // Setup client
     const client = new client_1.SuiClient({
         url: `https://fullnode.${CONFIG.network}.sui.io:443`
@@ -90,6 +90,7 @@ async function initializeGatewayV2() {
     console.log('Admin Address:', adminAddress);
     console.log('Network:', CONFIG.network);
     console.log('Package ID:', CONFIG.packageId);
+    console.log('New Feature: Standard withdrawal support (send_tokens_standard)');
     console.log('');
     // Check Gateway state
     console.log('📊 Checking Gateway state...');
@@ -215,6 +216,7 @@ async function initializeGatewayV2() {
                     const change = result.objectChanges.find((c) => c.objectId === obj.reference.objectId);
                     if (change && 'objectType' in change && change.objectType?.includes('GatewayCapabilities')) {
                         console.log('  ✨ GatewayCapabilities created!');
+                        console.log('  💾 IMPORTANT: Save this ID for withdrawals:', obj.reference.objectId);
                     }
                 }
             });
@@ -241,7 +243,10 @@ async function initializeGatewayV2() {
             console.log('- Minting Limit:', updatedContent.fields.minting_limit);
             console.log('- Paused:', updatedContent.fields.paused);
             console.log('\n🎉 Gateway initialization complete!');
-            console.log('The Gateway can now mint and burn tBTC.');
+            console.log('The Gateway can now:');
+            console.log('- Mint and burn tBTC');
+            console.log('- Process withdrawals with payload (send_tokens)');
+            console.log('- Process standard withdrawals without payload (send_tokens_standard) ✨');
         }
         else {
             console.error('❌ Gateway initialization verification failed');
