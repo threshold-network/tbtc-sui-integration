@@ -10,20 +10,22 @@ const client_1 = require("@mysten/sui.js/client");
 const ed25519_1 = require("@mysten/sui.js/keypairs/ed25519");
 const secp256k1_1 = require("@mysten/sui.js/keypairs/secp256k1");
 const utils_1 = require("@mysten/sui.js/utils");
-// V3 Testnet deployment configuration (with add_minter_with_cap fix)
+// V4 Testnet deployment configuration (with Sepolia chain ID support)
 const CONFIG = {
     network: 'testnet',
-    packageId: '0xd7028315d85a54310f6eb80649410fbe09eaf06369927670c122663dfc5d9d0e',
+    packageId: '0x958ea8ea472b7c274961ed94aac36d67c2971acbf435e65a940f5ce43203d140',
     // Admin capabilities
     adminCaps: {
-        tbtc: '0xff55c23f5136e597735ccffede136b6332cc23378ddd593eedce94adb2cdd33c',
-        gateway: '0x2f27a20a4745368f09730bd32e45b78c3fe00bba49d6530ea91d8d12104805e7',
-        treasuryCap: '0xb108a26d24c81df802a2653b2f611f486d4a0bc1a58222240ec9ef0a69353c52',
+        tbtc: '0x035f2fd95125b175afe5ed2d26b341ba7dda19ac4132e2419d0f739a5b6035cd',
+        gateway: '0x10917847b2a4474fe9f33bf10e5f3f3af3d546f4a4c60ca99ea45a3ff42dc72d',
+        treasuryCap: '0x6dde9e89509fe4d28bebdc037990e54a41d9390190a347a15e8be92c0bd92ad2',
+        bitcoinDepositor: '0x00fcb7c584d77e50e971f3d27d88d31516d62fca429ab33081d3ec6f85808131',
     },
     // Shared objects
     sharedObjects: {
-        tokenState: '0x6a484edd31ad6d2fcbc9ab9e1e8630ebd192d695dae054df058b0a1ca65bbfe7',
-        gatewayState: '0x6fe70b4221e911c85bc21e3225b287253e2e6cf17a6c6921d18b10fc7c033cec',
+        tokenState: '0xdbfda6e3a9518847968ba66209c6eb171df9568576011f9ee63fb9672dfdecc1',
+        gatewayState: '0x5026aeca1bed969649d7ad11f66377f0b0215dfae7f64f00e4a35d02c8cc4399',
+        receiverState: '0x7e55e90a6696944a9e510704018c64249ce483947c41a8e777b5edfd6c1e4b14',
     },
     // Wormhole configuration
     wormhole: {

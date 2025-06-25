@@ -11,6 +11,7 @@ module l2_tbtc::Gateway {
     use token_bridge::complete_transfer_with_payload;
     use token_bridge::state::verified_asset;
     use token_bridge::transfer_tokens_with_payload::{Self, prepare_transfer};
+    use token_bridge::transfer_with_payload;
     use token_bridge::vaa::verify_only_once;
     use wormhole::bytes32;
     use wormhole::emitter::{Self, EmitterCap};
@@ -382,16 +383,10 @@ module l2_tbtc::Gateway {
         assert!(!table::contains(&state.processed_vaas, digest_bytes), E_MESSAGE_ALREADY_PROCESSED);
         let emitter_chain = verified_vaa.emitter_chain();
         let emitter_address = verified_vaa.emitter_address();
-        let payload = verified_vaa.payload();
 
         // Verify the emitter chain and address from trusted_emitters table in state
         assert!(emitter_exists(state, emitter_chain), E_INVALID_CHAIN_ID);
         assert!(emitter_address == get_emitter(state,emitter_chain), E_INVALID_SENDER);
-
-        // Extract payload from VAA
-
-        // Parse our custom payload format
-        let recipient = parse_encoded_address(&payload);
 
         // Verify the VAA only once to prevent replay attacks
         let msg = verify_only_once(token_bridge_state, verified_vaa);
@@ -404,9 +399,15 @@ module l2_tbtc::Gateway {
         // Redeem the coins
         let (
             bridged_coins,
-            _parsed_transfer,
+            parsed_transfer,
             _source_chain,
         ) = complete_transfer_with_payload::redeem_coin(&capabilities.emitter_cap, receipt);
+
+        // Extract the additional payload from the TransferWithPayload struct
+        let additional_payload = transfer_with_payload::take_payload(parsed_transfer);
+
+        // Parse our custom payload format to get the recipient address
+        let recipient = parse_encoded_address(&additional_payload);
 
         // Get the amount of tokens to mint
         let amount = coin::value(&bridged_coins);

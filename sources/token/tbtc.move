@@ -9,7 +9,6 @@ module l2_tbtc::TBTC {
     // === Constants ===
 
     // Error codes
-    const E_NOT_MINTER: u64 = 0;
     const E_NOT_GUARDIAN: u64 = 1;
     const E_ALREADY_MINTER: u64 = 2;
     const E_NOT_IN_MINTERS_LIST: u64 = 3;
@@ -246,8 +245,8 @@ module l2_tbtc::TBTC {
         recipient: address,
         ctx: &mut TxContext,
     ) {
-        let minter = tx_context::sender(ctx);
-        assert!(is_minter(state, minter), E_NOT_MINTER);
+        // Only check that the contract is not paused
+        // The MinterCap is sufficient authorization
         assert!(!state.paused, E_PAUSED);
 
         let minted_coin = coin::mint(treasury_cap, amount, ctx);
