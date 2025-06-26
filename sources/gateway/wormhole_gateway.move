@@ -11,6 +11,8 @@ module l2_tbtc::Gateway {
     use token_bridge::complete_transfer_with_payload;
     use token_bridge::state::verified_asset;
     use token_bridge::transfer_tokens_with_payload::{Self, prepare_transfer};
+    use token_bridge::transfer_tokens;
+    use token_bridge::transfer_with_payload;
     use token_bridge::vaa::verify_only_once;
     use wormhole::bytes32;
     use wormhole::emitter::{Self, EmitterCap};
@@ -382,16 +384,10 @@ module l2_tbtc::Gateway {
         assert!(!table::contains(&state.processed_vaas, digest_bytes), E_MESSAGE_ALREADY_PROCESSED);
         let emitter_chain = verified_vaa.emitter_chain();
         let emitter_address = verified_vaa.emitter_address();
-        let payload = verified_vaa.payload();
 
         // Verify the emitter chain and address from trusted_emitters table in state
         assert!(emitter_exists(state, emitter_chain), E_INVALID_CHAIN_ID);
         assert!(emitter_address == get_emitter(state,emitter_chain), E_INVALID_SENDER);
-
-        // Extract payload from VAA
-
-        // Parse our custom payload format
-        let recipient = parse_encoded_address(&payload);
 
         // Verify the VAA only once to prevent replay attacks
         let msg = verify_only_once(token_bridge_state, verified_vaa);
@@ -404,9 +400,15 @@ module l2_tbtc::Gateway {
         // Redeem the coins
         let (
             bridged_coins,
-            _parsed_transfer,
+            parsed_transfer,
             _source_chain,
         ) = complete_transfer_with_payload::redeem_coin(&capabilities.emitter_cap, receipt);
+
+        // Extract the additional payload from the TransferWithPayload struct
+        let additional_payload = transfer_with_payload::take_payload(parsed_transfer);
+
+        // Parse our custom payload format to get the recipient address
+        let recipient = parse_encoded_address(&additional_payload);
 
         // Get the amount of tokens to mint
         let amount = coin::value(&bridged_coins);
@@ -654,6 +656,102 @@ module l2_tbtc::Gateway {
         event::emit(TokensSent {
             sequence,
             amount: amount_wrapped,
+            recipient_chain,
+            recipient: sui::address::from_bytes(recipient_address),
+            nonce,
+        });
+    }
+
+    /// Send tokens using standard transfer (without payload)
+    /// This function allows direct withdrawal to user's L1 address without requiring a redeemer contract
+    /// The tokens are sent directly to the recipient address on the target chain
+    /// This is used for user-initiated withdrawals back to L1
+    public entry fun send_tokens_standard<CoinType>(
+        state: &mut GatewayState,
+        capabilities: &mut GatewayCapabilities,
+        token_bridge_state: &mut token_bridge::state::State,
+        token_state: &mut TBTC::TokenState,
+        treasury: &mut WrappedTokenTreasury<CoinType>,
+        wormhole_state: &mut WormholeState,
+        recipient_chain: u16,
+        recipient_address: vector<u8>,
+        coins: Coin<TBTC::TBTC>,
+        relayer_fee: u64,
+        nonce: u32,
+        message_fee: Coin<sui::sui::SUI>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        // Check gateway state
+        assert!(state.is_initialized, E_NOT_INITIALIZED);
+        assert!(!state.paused, E_PAUSED);
+
+        // Check if the nonce is valid
+        assert!(state.nonce + 1 == nonce, E_WRONG_NONCE);
+
+        // Get the amount of tokens to send
+        let amount_l2btc = coins.balance().value();
+
+        // Check if treasury has enough tokens
+        let treasury_balance = coin::value(&treasury.tokens);
+        assert!(treasury_balance >= amount_l2btc, E_NOT_ENOUGH_TOKENS);
+
+        // Burn the canonical tBTC tokens
+        TBTC::burn(
+            &mut capabilities.treasury_cap,
+            token_state,
+            coins,
+        );
+
+        // Withdraw the equivalent amount of wrapped tokens from the treasury
+        let wrapped_coins = coin::split(&mut treasury.tokens, amount_l2btc, ctx);
+
+        // Update the minted amount in the state
+        if (state.minted_amount >= amount_l2btc) {
+            state.minted_amount = state.minted_amount - amount_l2btc;
+        } else {
+            state.minted_amount = 0;
+        };
+
+        // Get the asset info from the token bridge
+        let asset_info: token_bridge::token_registry::VerifiedAsset<CoinType> = verified_asset(
+            token_bridge_state,
+        );
+
+        // Prepare the standard transfer (without payload)
+        let (transfer_ticket, dust) = transfer_tokens::prepare_transfer(
+            asset_info,
+            wrapped_coins,
+            recipient_chain,
+            recipient_address,
+            relayer_fee,
+            nonce,
+        );
+
+        // Destroy dust coins
+        coin::destroy_zero(dust);
+
+        // Execute the transfer
+        let prepared_msg = transfer_tokens::transfer_tokens(
+            token_bridge_state,
+            transfer_ticket,
+        );
+
+        // Publish the message to Wormhole
+        let sequence = wormhole::publish_message::publish_message(
+            wormhole_state,
+            message_fee,
+            prepared_msg,
+            clock,
+        );
+
+        // Increment the nonce
+        increment_nonce(state);
+
+        // Emit an event for the transaction
+        event::emit(TokensSent {
+            sequence,
+            amount: amount_l2btc,
             recipient_chain,
             recipient: sui::address::from_bytes(recipient_address),
             nonce,

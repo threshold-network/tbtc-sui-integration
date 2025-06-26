@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "CB278F49079B80A5AF8BC1C5A0543A738FC774CD3ED97C6B875759B66C98A362"
+manifest_digest = "DE18F1B30A3FBA49A658926F8819F9D2C6222D0764CA558D526E9512F959CA11"
 deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -24,19 +24,16 @@ dependencies = [
 
 [[move.package]]
 id = "TokenBridge"
-source = { git = "https://github.com/wormhole-foundation/wormhole.git", rev = "main", subdir = "sui/token_bridge" }
+source = { local = "../wormhole/sui/token_bridge" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
-]
-
-dev-dependencies = [
   { id = "Wormhole", name = "Wormhole" },
 ]
 
 [[move.package]]
 id = "Wormhole"
-source = { git = "https://github.com/wormhole-foundation/wormhole.git", rev = "main", subdir = "sui/wormhole" }
+source = { local = "../wormhole/sui/wormhole" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -51,6 +48,6 @@ flavor = "sui"
 
 [env.testnet]
 chain-id = "4c78adac"
-original-published-id = "0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7"
-latest-published-id = "0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7"
+original-published-id = "0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae"
+latest-published-id = "0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae"
 published-version = "1"
