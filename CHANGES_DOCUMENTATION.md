@@ -2,9 +2,12 @@
 
 ## Executive Summary
 
-This document outlines the changes made to the tBTC SUI integration, which includes:
+This document provides comprehensive documentation of all changes made to the tBTC SUI integration for audit review. The changes include:
+
 1. **Critical Fix**: MinterCap ownership issue that prevented Gateway initialization
-2. **Enhancement**: Standard token transfer support for simplified withdrawals
+2. **Critical Security Change**: Authorization model shift from address-based to capability-based for minting
+3. **Enhancement**: Standard token transfer support for simplified withdrawals
+4. **Technical Updates**: Payload extraction refactoring, chain ID configuration, and infrastructure improvements
 
 ---
 
@@ -19,8 +22,11 @@ As documented in [MINTERCAP_FIX_SUMMARY.md](./MINTERCAP_FIX_SUMMARY.md), the Gat
 - MinterCap becomes permanently inaccessible
 - Gateway can't be initialized without MinterCap
 
-### Solution
-Added `public fun add_minter_with_cap()` to TBTC module that returns MinterCap instead of transferring to minter address, enabling Gateway initialization for shared objects.
+### Solution Implementation
+
+**File**: `sources/token/tbtc.move` (lines 109-128)
+
+Added `public fun add_minter_with_cap()` to TBTC module that returns MinterCap instead of transferring to minter address:
 
 ```move
 public fun add_minter_with_cap(
@@ -44,7 +50,16 @@ public fun add_minter_with_cap(
 }
 ```
 
+### Removed Functions
+
+**File**: `sources/token/tbtc.move`
+
+The original `add_minter` function that caused the issue was completely removed to prevent future misuse.
+
 ### Implementation Approach
+
+**File**: `scripts/initialize_gateway_v2_ptb.ts`
+
 Using Programmable Transaction Block (PTB) for atomic initialization:
 ```typescript
 // Single PTB transaction
@@ -66,13 +81,89 @@ tx.moveCall({
 await client.signAndExecuteTransactionBlock({ signer, transactionBlock: tx });
 ```
 
-### Security Considerations
-1. **Admin Trust**: Admin temporarily holds MinterCap between creation and initialization
-2. **Atomic Operation**: PTB ensures both operations happen in single transaction
-3. **No Breaking Changes**: Original `add_minter` function remains for backward compatibility
+---
 
-### Impact
-Without this fix, the Gateway cannot be initialized and the entire tBTC bridge is non-operational on SUI.
+## Part 1A: Critical Authorization Model Changes
+
+### Overview
+The mint function authorization model has been fundamentally changed from address-based verification to capability-based authorization. This is a **critical security change** that affects how minting permissions are enforced.
+
+### Removed Constants
+
+**File**: `sources/token/tbtc.move` (line removed)
+```move
+// REMOVED:
+const E_NOT_MINTER: u64 = 0;
+```
+
+### Modified Mint Function Authorization
+
+**File**: `sources/token/tbtc.move` (lines 240-257)
+
+#### Before (Original Implementation):
+```move
+public entry fun mint(
+    _: &MinterCap,
+    treasury_cap: &mut TreasuryCap<TBTC>,
+    state: &TokenState,
+    amount: u64,
+    recipient: address,
+    ctx: &mut TxContext,
+) {
+    let minter = tx_context::sender(ctx);
+    assert!(is_minter(state, minter), E_NOT_MINTER);  // REMOVED
+    assert!(!state.paused, E_PAUSED);
+    // ... rest of function
+}
+```
+
+#### After (Current Implementation):
+```move
+public entry fun mint(
+    _: &MinterCap,
+    treasury_cap: &mut TreasuryCap<TBTC>,
+    state: &TokenState,
+    amount: u64,
+    recipient: address,
+    ctx: &mut TxContext,
+) {
+    // Only check that the contract is not paused
+    // The MinterCap is sufficient authorization
+    assert!(!state.paused, E_PAUSED);
+
+    let minted_coin = coin::mint(treasury_cap, amount, ctx);
+    let minted_amount = coin::value(&minted_coin);
+    transfer::public_transfer(minted_coin, recipient);
+
+    event::emit(TokensMinted { amount: minted_amount, recipient });
+}
+```
+
+### Security Model Change Analysis
+
+#### Previous Model (Address-Based):
+1. Required MinterCap possession AND sender address verification
+2. Double-checked authorization: capability + address in minters list
+3. Protected against stolen/misused MinterCaps
+
+#### New Model (Capability-Based):
+1. **MinterCap acts as a bearer token**
+2. **Anyone possessing a valid MinterCap can mint tokens**
+3. No sender address verification
+4. No check against minters list
+
+### Critical Security Implications
+
+1. **Bearer Token Risk**: If a MinterCap is compromised, the attacker can mint tokens without being in the minters list
+2. **No Sender Verification**: The system no longer validates WHO is calling the mint function
+3. **Simplified Trust Model**: Security relies entirely on proper MinterCap management
+4. **Irreversible Authorization**: Once a MinterCap exists, it grants minting power regardless of the minters list state
+
+### Rationale for Change
+This change was necessary because:
+- Shared objects (like Gateway) cannot sign transactions
+- The previous model prevented Gateway from using its MinterCap
+- Capability-based model aligns with SUI's object-capability security model
 
 ---
 
@@ -84,19 +175,20 @@ The original Gateway implementation only supported token transfers with payload,
 - Complex payload encoding and decoding
 - Additional gas costs and complexity for users
 
-This enhancement adds support for standard transfers, allowing users to withdraw directly to their L1 addresses.
-
-### Implementation
+### Implementation Details
 
 **File**: `sources/gateway/wormhole_gateway.move`
 
-**Change A**: Added import for standard transfer module
+#### Change A: Added imports (lines 14-15)
 ```move
 use token_bridge::transfer_tokens;
+use token_bridge::transfer_with_payload;
 ```
 
-**Change B**: Added new public entry function `send_tokens_standard`
+#### Change B: Added new function (lines 669-765)
 ```move
+/// Send tokens using standard transfer (without payload)
+/// This function allows direct withdrawal to user's L1 address without requiring a redeemer contract
 public entry fun send_tokens_standard<CoinType>(
     state: &mut GatewayState,
     capabilities: &mut GatewayCapabilities,
@@ -115,23 +207,191 @@ public entry fun send_tokens_standard<CoinType>(
 )
 ```
 
-### Key Differences from Original `send_tokens`
-1. Uses `transfer_tokens::transfer_tokens` instead of `transfer_tokens_with_payload::transfer_tokens_with_payload`
+### Key Implementation Details
+1. Uses `transfer_tokens::transfer_tokens` for standard transfers
 2. No payload parameter required
-3. Simplified recipient handling - address goes directly to the transfer function
-4. Maintains all security checks and validations from the original function
+3. Direct recipient address handling
+4. Maintains all security validations from original function
 
-### Benefits
-1. **Simplified UX**: Direct withdrawals to L1 addresses
-2. **Reduced Gas**: Uses simpler `completeTransfer` on L1
-3. **Broader Compatibility**: Works with any address that can receive tokens
-4. **Backward Compatible**: Original payload-based function unchanged
+---
 
-### Security Considerations
-1. **Validation**: All existing security checks maintained
-2. **Replay Protection**: Nonce mechanism unchanged
-3. **Atomicity**: Token burning occurs before treasury withdrawal
-4. **Event Emission**: Full transparency for monitoring
+## Part 3: Additional Technical Changes
+
+### 3.1 Payload Extraction Refactoring
+
+**File**: `sources/gateway/wormhole_gateway.move` (lines 400-411)
+
+Modified VAA processing to properly extract payload from TransferWithPayload struct:
+
+```move
+// Redeem the coins
+let (
+    bridged_coins,
+    parsed_transfer,  // Now captured for payload extraction
+    _source_chain,
+) = complete_transfer_with_payload::redeem_coin(&capabilities.emitter_cap, receipt);
+
+// Extract the additional payload from the TransferWithPayload struct
+let additional_payload = transfer_with_payload::take_payload(parsed_transfer);
+
+// Parse our custom payload format to get the recipient address
+let recipient = parse_encoded_address(&additional_payload);
+```
+
+This change ensures proper payload handling when processing cross-chain transfers.
+
+### 3.2 Chain ID Configuration Update
+
+**File**: `sources/bitcoin_depositor/bitcoin_depositor.move` (line 17)
+
+```move
+const EMITTER_CHAIN_L1: u16 = 10002;  // Changed from 2
+```
+
+Updated for testnet deployment configuration. This constant is used for chain validation (line 156).
+
+### 3.3 Development Configuration
+
+**File**: `Move.testnet.toml` (lines 18-23)
+
+Added development addresses section:
+```toml
+[dev-addresses]
+# The dev-addresses section allows overwriting named addresses for the `--test`
+# and `--dev` modes.
+# token_bridge = "0x562760fc51d90d4ae1835bac3e91e0e6987d3497b06f066941d3e51f6e8d76d0"
+# wormhole = "0xf47329f4344f3bf0f8e436e2f7b485466cff300f12a166563995d3888c296a94"
+# l2_tbtc = "0x402"
+```
+
+---
+
+## Part 4: Infrastructure and Testing Updates
+
+### 4.1 Test Infrastructure
+
+**File**: `tests/mintercap_fix_tests.move` (166 lines)
+
+Comprehensive test suite for MinterCap fix including:
+- `test_add_minter_with_cap_returns_cap()` - Verifies MinterCap is returned
+- `test_mint_with_cap_from_gateway()` - Tests Gateway minting simulation
+- `test_cannot_add_same_minter_twice()` - Duplicate minter prevention
+- `test_remove_minter_functionality()` - Minter removal verification
+
+### 4.2 Project Setup
+
+**File**: `package.json` (lines 1-9)
+```json
+{
+  "devDependencies": {
+    "@types/node": "^24.0.4",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@mysten/sui.js": "^0.54.1"
+  }
+}
+```
+
+Added Node.js project configuration for TypeScript initialization scripts.
+
+### 4.3 Additional Infrastructure Files
+
+- **File**: `scripts/set_env.sh` - Environment setup for private key management
+- **File**: `.gitignore` - Updated to include `node_modules/` and environment files
+- **File**: `Move.toml.backup` - Backup of original configuration
+
+---
+
+## Files Modified - Complete List
+
+### Core Contract Changes
+1. **`sources/token/tbtc.move`**
+   - Lines 109-128: Added `add_minter_with_cap()` function
+   - Lines 240-257: Modified `mint()` function authorization
+   - Removed: `E_NOT_MINTER` constant and original `add_minter()` function
+
+2. **`sources/gateway/wormhole_gateway.move`**
+   - Lines 14-15: Added new imports
+   - Lines 400-411: Payload extraction refactoring
+   - Lines 669-765: Added `send_tokens_standard()` function
+
+3. **`sources/bitcoin_depositor/bitcoin_depositor.move`**
+   - Line 17: Updated `EMITTER_CHAIN_L1` constant
+
+### Scripts and Configuration
+4. **`scripts/initialize_gateway_v2_ptb.ts`** - PTB initialization implementation
+5. **`Move.testnet.toml`** - Added dev-addresses section
+6. **`Move.lock`** - Updated dependencies and published addresses
+7. **`package.json`** - Project dependencies
+8. **`package-lock.json`** - Dependency lock file
+
+### Testing and Documentation
+9. **`tests/mintercap_fix_tests.move`** - Comprehensive test suite
+10. **`MINTERCAP_FIX_SUMMARY.md`** - Quick reference guide
+11. **`docs/mintercap-fix-deployment-guide.md`** - Deployment instructions
+12. **`docs/devnet-testing-plan.md`** - Testing procedures
+
+---
+
+## Expanded Audit Recommendations
+
+### Critical Focus Areas for Authorization Model
+
+1. **MinterCap Security Model**
+   - Review the implications of bearer token authorization
+   - Assess risks of MinterCap theft or misuse
+   - Verify no unintended MinterCaps can be created
+
+2. **Mint Function Authorization**
+   - **CRITICAL**: Validate that removing sender verification is acceptable
+   - Confirm MinterCap possession is sufficient security
+   - Review all paths that could lead to minting
+
+3. **Gateway Initialization Flow**
+   - Verify PTB atomicity guarantees
+   - Ensure MinterCap cannot be intercepted during initialization
+   - Validate AdminCap requirements are sufficient
+
+### Standard Transfer Security
+
+1. **Equivalence Verification**
+   - Confirm standard transfers maintain same security as payload transfers
+   - Verify recipient validation on destination chain
+   - Check for any edge cases in direct transfers
+
+2. **State Management**
+   - Validate nonce mechanism prevents replay attacks
+   - Ensure proper state updates for minted amounts
+   - Verify event emissions for monitoring
+
+### Technical Implementation
+
+1. **Payload Handling**
+   - Verify proper extraction from TransferWithPayload struct
+   - Ensure no data loss during payload processing
+   - Validate recipient address parsing
+
+2. **Chain Configuration**
+   - Confirm chain ID changes are intentional and correct
+   - Verify emitter validation logic remains secure
+
+### Attack Vectors to Consider
+
+1. **MinterCap Attacks**
+   - Stolen MinterCap usage
+   - Unauthorized minting without address verification
+   - MinterCap duplication attempts
+
+2. **Initialization Attacks**
+   - Race conditions during Gateway setup
+   - MinterCap interception
+   - Double initialization attempts
+
+3. **Cross-Chain Attacks**
+   - Invalid chain ID exploitation
+   - Payload manipulation
+   - Replay attacks on standard transfers
 
 ---
 
@@ -153,41 +413,13 @@ Successfully tested on SUI testnet:
 
 ---
 
-## Files Modified
-
-### Critical Fix Files
-1. `sources/token/tbtc.move` - Added `add_minter_with_cap` function
-2. `scripts/initialize_gateway_v2_ptb.ts` - PTB initialization script
-
-### Enhancement Files
-1. `sources/gateway/wormhole_gateway.move` - Added `send_tokens_standard` function
-
----
-
-## Audit Recommendations
-
-### For MinterCap Fix
-1. **MinterCap Flow**: Verify the security of returning MinterCap to caller
-2. **PTB Atomicity**: Ensure transaction atomicity guarantees
-3. **Admin Privileges**: Confirm AdminCap requirements are sufficient
-
-### For Standard Transfer Enhancement
-1. **Standard Transfer**: Validate security equivalence with payload transfers
-2. **Event Emissions**: Confirm all critical operations emit events
-3. **Recipient Validation**: Ensure proper address validation
-
-### General Attack Vectors Considered
-1. **MinterCap Theft**: Mitigated by AdminCap requirement
-2. **Double Initialization**: Prevented by existing checks
-3. **Replay Attacks**: Nonce mechanism unchanged
-4. **Invalid Recipients**: Validated by Wormhole
-
----
-
 ## Conclusion
 
-The deployment includes:
-1. **Critical Fix**: Resolves the MinterCap ownership issue that prevented Gateway initialization - without this fix, the system is completely non-functional
-2. **Enhancement**: Adds standard transfer support for improved user experience - allows direct withdrawals without redeemer contracts
+This deployment includes critical changes that fundamentally alter the security model:
 
-Both changes maintain security and backward compatibility while addressing different aspects of the system.
+1. **MinterCap Fix**: Resolves the ownership paradox but introduces capability-based authorization
+2. **Authorization Model Change**: **CRITICAL** - Shifts from address-based to bearer token model for minting
+3. **Standard Transfer Support**: Enhances UX while maintaining security
+4. **Technical Improvements**: Proper payload handling and configuration updates
+
+The auditor should pay special attention to the authorization model changes in the mint function, as this represents a significant shift in the security architecture of the system.
