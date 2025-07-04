@@ -66,7 +66,7 @@ module l2_tbtc::TBTC {
             // https://github.com/wormhole-foundation/wormhole/blob/4afcbdeb13ec03bdc45516c9be6da0091079f352/sui/token_bridge/sources/datatypes/normalized_amount.move#L25
             8, 
             b"TBTC",
-            b"Threshold Bitcoin",
+            b"tBTC v2",
             b"Canonical L2/sidechain token implementation for tBTC",
             option::some(
                 url::new_unsafe_from_bytes(

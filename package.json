@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "build:mainnet": "sui move build -p . --config Move.mainnet.toml",
+    "deploy:mainnet": "sui client publish --gas-budget 100000000 --config Move.mainnet.toml",
+    "initialize:mainnet": "npx tsx scripts/initialize_gateway_mainnet.ts"
+  },
   "devDependencies": {
     "@types/node": "^24.0.4",
     "typescript": "^5.8.3"

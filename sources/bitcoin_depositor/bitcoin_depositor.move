@@ -14,7 +14,7 @@ module l2_tbtc::BitcoinDepositor {
 
     // === Constants ===
 
-    const EMITTER_CHAIN_L1: u16 = 10002;
+    const EMITTER_CHAIN_L1: u16 = 2;
 
     // === Error codes ===
 
