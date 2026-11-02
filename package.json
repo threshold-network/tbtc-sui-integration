@@ -2,17 +2,19 @@
   "scripts": {
     "build:mainnet": "sui move build -p . --config Move.mainnet.toml",
     "deploy:mainnet": "sui client publish --gas-budget 100000000 --config Move.mainnet.toml",
-    "initialize:mainnet": "npx tsx scripts/initialize_gateway_mainnet.ts"
+    "initialize:mainnet": "node ./node_modules/tsx/dist/cli.mjs scripts/initialize_gateway_mainnet.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.4",
     "dotenv": "^16.5.0",
-    "ts-node": "^10.9.0",    
+    "ts-node": "^10.9.0",
+    "tsx": "4.23.15",
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@mysten/sui.js": "^0.54.1",
-    "axios": "^1.10.0",
-    "ethers": "^5.8.0"    
+    "@mysten/sui.js": "0.54.1"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
