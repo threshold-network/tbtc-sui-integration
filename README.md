@@ -24,6 +24,36 @@ Before deploying these contracts, ensure you have the following installed:
 
 - **Sui CLI**: Command-line interface for interacting with the Sui network. [Installation Guide](https://docs.sui.io/guides/getting-started)
 - **Move Analyzer**: Tool for analyzing and testing Move modules. [Move Analyzer Tutorial](https://blog.sui.io/move-analyzer-tutorial/)
+- **Node.js 22 or newer**: Required for the maintained mainnet initialization script.
+
+### Locked mainnet initialization tooling
+
+Install the checked-in dependency graph before making signing credentials
+available to the process:
+
+```bash
+npm ci --ignore-scripts
+node ./node_modules/tsx/dist/cli.mjs --version
+```
+
+After reviewing the deployment configuration and arranging the required
+`SUI_PRIVATE_KEY`, use the existing initialization command:
+
+```bash
+npm run initialize:mainnet
+```
+
+This command runs the exact local `tsx` installation recorded in
+`package-lock.json`. It fails when the runner is missing, without downloading
+packages or selecting a global runner. Do not replace it with `npx tsx` in a
+credentialed shell. The existing script performs a dry run and then submits a
+mainnet transaction; installing or checking the toolchain does not require a key.
+
+The Sui SDK remains pinned at the existing `@mysten/sui.js` 0.54.1 version so this
+tooling change does not change transaction construction. Migration to the renamed
+SDK requires separate protocol compatibility validation. Older deployment notes
+describe historical commands; use the locked installation above for this entry
+point.
 
 ## Project Structure
 
